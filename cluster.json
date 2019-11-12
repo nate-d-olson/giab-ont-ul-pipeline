@@ -40,6 +40,13 @@
         "n" : 4,
         "partition" : "msalit,owners"
     },
+    "sort_combined" :
+    {
+        "time" : "08:00:00",
+        "mem" : "16G",
+        "n" : 8,
+        "partition" : "msalit,owners"
+    },
     "phase_bams" :
     {
         "time" : "1-00:00:00",
