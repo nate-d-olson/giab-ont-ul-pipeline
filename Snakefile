@@ -33,32 +33,33 @@ def get_config(wildcards):
     return flowcells.loc[wildcards.flowcell,"config"]
 
 ## Basecalling --------------------------------------------------------------------
-rule basecalling:
-    input: "../../raw/{flowcell}"
-    output: directory("fastq/{flowcell}")
-    params: get_config
-    shell: 'sw/ont-guppy/bin/guppy_basecaller -x cuda:0 -r \
-                --num_callers 8 \
-                --gpu_runners_per_device 4 \
-                --chunks_per_runner 1664 \
-                --input_path {input} \
-                --save_path {output} \
-                --records_per_fastq 0 \
-                --config {params}'
+## Skipping basecalling for UCSC data
+# rule basecalling:
+#     input: "../../raw/{flowcell}"
+#     output: directory("fastq/{flowcell}")
+#     params: get_config
+#     shell: 'sw/ont-guppy/bin/guppy_basecaller -x cuda:0 -r \
+#                 --num_callers 8 \
+#                 --gpu_runners_per_device 4 \
+#                 --chunks_per_runner 1664 \
+#                 --input_path {input} \
+#                 --save_path {output} \
+#                 --records_per_fastq 0 \
+#                 --config {params}'
 
-rule combine_and_compress_fastq:
-    input: rules.basecalling.output
-    output: "fastq/{flowcell}.fastq.gz"
-    shell: 'cat {input}/*fastq | gzip > {output}'
+# rule combine_and_compress_fastq:
+#     input: rules.basecalling.output
+#     output: "fastq/{flowcell}.fastq.gz"
+#     shell: 'cat {input}/*fastq | gzip > {output}'
 
-## QC fastq files
-rule fastqc:
-    input: "fastq/{flowcell}.fastq.gz"
-    output:
-        html="qc/fastqc/{flowcell}.html",
-        zip="qc/fastqc/{flowcell}.zip"
-    wrapper:
-        "0.27.1/bio/fastqc"
+# ## QC fastq files
+# rule fastqc:
+#     input: "fastq/{flowcell}.fastq.gz"
+#     output:
+#         html="qc/fastqc/{flowcell}.html",
+#         zip="qc/fastqc/{flowcell}.zip"
+#     wrapper:
+#         "0.27.1/bio/fastqc"
 
 ## Aligning to reference -----------------------------------------------------------
 def get_readgroup(wildcards):
@@ -70,6 +71,7 @@ def get_readgroup(wildcards):
     gpy_cfg  = flowcells.loc[wildcards.flowcell,'config']
     flowcell = flowcells.loc[wildcards.flowcell, 'type']
     kit      = flowcells.loc[wildcards.flowcell, 'kit']
+    sample   = flowcells.loc[wildcards.flowcell, 'sample']
     
     read_group =   (
         f"@RG\\tID:{run}\\t"
@@ -80,7 +82,7 @@ def get_readgroup(wildcards):
         f"DT:{date}\\t"
         f"PG:guppy-{config['guppy_version']}-{gpy_cfg}\\t"
         f"DS:Flowcell={flowcell},kit={kit}\\t"
-        f"SM:HG002"
+        f"SM:{sample}"
     )
     
     return(read_group)
@@ -104,7 +106,7 @@ rule map_reads:
     input:
         ref="resources/{refid}.fna", 
         refidx = "resources/{refid}.fna.fai",
-        fastq=rules.combine_and_compress_fastq.output
+        fastq="fastq/{flowcell}.fastq.gz"
     output: "bams/{flowcell}_{refid}.bam"
     params: read_group=get_readgroup, mem=4, threads=4
     shell: """
