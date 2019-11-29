@@ -109,6 +109,7 @@ rule map_reads:
         fastq="fastq/{flowcell}.fastq.gz"
     output: "bams/{flowcell}_{refid}.bam"
     params: read_group=get_readgroup, mem=4, threads=4
+    conda: "envs/map_reads.yaml"
     shell: """
         minimap2 -t {params.threads} -aL -z 600,200 -x map-ont \
                 -R \'{params.read_group}\' {input.ref} {input.fastq} \
@@ -133,6 +134,7 @@ rule bam_stats:
         "bams/{flowcell}_{refid}.bam"
     output:
         "qc/{flowcell}_{refid}.bam.stats.tsv.gz"
+    conda: "envs/bam_stats.yaml"
     shell:
         "python scripts/get_bam_stat.py {input} {output}"
     
@@ -166,6 +168,7 @@ rule sort_combined:
         bamidx="combined_{refid}.bam.bai",
         ref="resources/{refid}.fna"
     output: "combined.sorted_{refid}.bam"
+    conda: "envs/map_reads.yaml"
     shell: "samtools sort -@4 -m 2G -O bam --reference {input.ref} -o {output} {input.bam}"
 
 rule index_sorted_combined:
