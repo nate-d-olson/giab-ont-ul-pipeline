@@ -39,7 +39,7 @@ def get_readgroup(wildcards):
     gpy_cfg  = flowcells.loc[wildcards.flowcell,'config']
     flowcell = flowcells.loc[wildcards.flowcell, 'type']
     kit      = flowcells.loc[wildcards.flowcell, 'kit']
-    sample   = flowcells.loc[wildcards.flowcell, 'sample']
+    sample   = flowcells.loc[wildcards.flowcell, 'sample_id']
     
     read_group =   (
         f"@RG\\tID:{wildcards.flowcell}\\t"
@@ -73,14 +73,16 @@ rule map_reads:
         ref="resources/{refid}.fna", 
         refidx = "resources/{refid}.fna.fai",
         fastq="fastq/{flowcell}.fastq.gz"
-    output: "bams/{flowcell}_{refid}.bam"
-    params: read_group=get_readgroup, mem=4, threads=4
+    output: 
+        bam="bams/{flowcell}_{refid}.bam",
+        bai="bams/{flowcell}_{refid}.bam.bai"
+    params: read_group=get_readgroup, mem=4, threads=8
     conda: "envs/map_reads.yaml"
     shell: """
-        minimap2 -t {params.threads} -aL -z 600,200 -x map-ont \
+        minimap2 -t {params.threads} --MD -aL -z 600,200 -x map-ont \
                 -R \'{params.read_group}\' {input.ref} {input.fastq} \
             | samtools sort -m {params.mem}G -@{params.threads} \
-                -O bam --reference {input.ref} > {output}
+                -O bam --reference {input.ref} > {output.bam}
         samtools index {output}
     """
     
