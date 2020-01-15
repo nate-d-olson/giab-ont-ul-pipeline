@@ -1,4 +1,2 @@
 flowcell_id,lab,date,sample_id,type,kit,config,platform
-PAD29338,UCSC,2019-01-25,GM24385_1,FLO-PRO002,SQK-LSK109,dna_r9.4.1_450bps_flipflop.cfg,PromethION
-PAD28937,UCSC,2019-01-25,GM24385_2,FLO-PRO002,SQK-LSK109,dna_r9.4.1_450bps_flipflop.cfg,PromethION
-PAD28926,UCSC,2019-01-25,GM24385_3,FLO-PRO002,SQK-LSK109,dna_r9.4.1_450bps_flipflop.cfg,PromethION
+NA12878-minion-ul,nanopore-wgs-consortium,2016,GM12878,FLO-MIN106,1D ligation kit,dna_r9.4.1_450bps_flipflop.cfg,MinION
