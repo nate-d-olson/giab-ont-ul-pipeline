@@ -19,11 +19,18 @@
         "resources" : "--gres gpu:1 -C GPU_GEN:VLT",
         "partition" : "gpu,owners"
     },
+    "combine_seq_summary" :
+    {
+        "time" : "04:00:00",
+        "mem" : "16G",
+        "n" : 2,
+        "partition" : "msalit,owners"
+    },
     "map_reads" :
     {
         "time" : "04:00:00",
         "mem" : "48G",
-        "n" : 4,
+        "n" : 8,
         "partition" : "msalit,owners"
     },
     "samtools_stats" :
@@ -33,18 +40,11 @@
         "n" : 4,
         "partition" : "msalit,owners"
     },
-    "combine_bams" :
+    "combine_bam_stats" :
     {
-        "time" : "08:00:00",
-        "mem" : "24G",
+        "time" : "02:00:00",
+        "mem" : "32G",
         "n" : 4,
-        "partition" : "msalit,owners"
-    },
-    "sort_combined" :
-    {
-        "time" : "08:00:00",
-        "mem" : "16G",
-        "n" : 8,
         "partition" : "msalit,owners"
     },
     "phase_bams" :
@@ -53,6 +53,19 @@
         "mem" : "16G",
         "n" : 4,
         "partition" : "msalit,owners"
-    }
-    
+    },
+    "combine_phased" :
+    {
+        "time" : "08:00:00",
+        "mem" : "8G",
+        "n" : 4,
+        "partition" : "msalit,owners"
+    },
+    "phased_bam_stats" :
+    {
+        "time" : "02:00:00",
+        "mem" : "16G",
+        "n" : 4,
+        "partition" : "msalit,owners"
+    }    
 }

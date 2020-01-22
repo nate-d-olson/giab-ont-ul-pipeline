@@ -15,20 +15,24 @@ REFIDS=['hs37d5','GRCh38']
 ## Loading flowcell metadata
 flowcells = pd.read_csv("flowcell_metadata.csv").set_index("flowcell_id")
 
+## Using signularity 
+singularity: "docker://continuumio/miniconda3:4.4.10"
+
 ## Running pipeline
 rule all:
     input: 
-        expand("combined.sorted_{refid}.bam", refid = REFIDS), 
-        expand("combined.sorted_{refid}.bam.bai", refid = REFIDS),
+        expand("combined_{refid}.bam", refid = REFIDS), 
+        expand("combined_{refid}.bam.bai", refid = REFIDS),
+        "combined.fastq.gz",
+	"combined.sequencing_summary.txt.gz",
+        expand("combined_{refid}_qc.txt", refid = REFIDS),
         expand("qc/{flowcell}_{refid}.bam.stats.tsv.gz", 
                refid = REFIDS,
                flowcell = list(flowcells.index)),
          expand("phased_{refid}.bam", refid = REFIDS), 
          expand("phased_{refid}.bam.bai", refid = REFIDS)
-        ## Multi QC not recognizing output
-        # expand("qc/multiqc_{refid}.html", refid = REFIDS)
 
-        
+
 def get_config(wildcards):
     return flowcells.loc[wildcards.flowcell,"config"]
 
@@ -60,6 +64,21 @@ rule fastqc:
     wrapper:
         "0.27.1/bio/fastqc"
 
+## Combining fastq and sequencing summaries ---------------------------------------
+
+rule combine_fastq:
+    input: expand("fastq/{flowcell}.fastq.gz", flowcell = list(flowcells.index))
+    output: "combined.fastq.gz"
+    shell: "cat {input} > {output}"
+
+rule combine_seq_summary:
+    input: expand("fastq/{flowcell}/sequencing_summary.txt", flowcell = list(flowcells.index))
+    output: "combined.sequencing_summary.txt.gz"
+    run: 
+        combined_tsv = pd.concat([pd.read_csv(f , delimiter='\t') for f in input])
+        combined_tsv.to_csv( output[0], sep = "\t", 
+                             index = False, compression = "gzip")
+
 ## Aligning to reference -----------------------------------------------------------
 def get_readgroup(wildcards):
     ## Format bam read group 
@@ -72,7 +91,7 @@ def get_readgroup(wildcards):
     kit      = flowcells.loc[wildcards.flowcell, 'kit']
     
     read_group =   (
-        f"@RG\\tID:{run}\\t"
+        f"@RG\\tID:{wildcards.flowcell}\\t"
         f"PU:{wildcards.flowcell}\\t"
         f"PL:nanopore\\t"
         f"PM:{model}\\t"
@@ -105,47 +124,44 @@ rule map_reads:
         ref="resources/{refid}.fna", 
         refidx = "resources/{refid}.fna.fai",
         fastq=rules.combine_and_compress_fastq.output
-    output: "bams/{flowcell}_{refid}.bam"
-    params: read_group=get_readgroup, mem=4, threads=4
+    output: 
+        bam="bams/{flowcell}_{refid}.bam",
+        bai="bams/{flowcell}_{refid}.bam.bai"
+    params: read_group=get_readgroup, mem=4, threads=4, temp_id="{flowcell}_{refid}"
     conda: "envs/map_reads.yaml"
-    shell: """
-        minimap2 -t {params.threads} -aL -z 600,200 -x map-ont \
-                -R \'{params.read_group}\' {input.ref} {input.fastq} \
-            | samtools sort -m {params.mem}G -@{params.threads} \
-                -O bam --reference {input.ref} > {output}
-        samtools index {output}
+    shell: """    
+        minimap2 -t {params.threads} -a -L -z 600,200 -x map-ont \
+                -R \'{params.read_group}\' {input.ref} {input.fastq} > sams/{params.temp_id}.sam
+        
+        samtools sort \
+		-m {params.mem}G -@{params.threads} \
+                --reference {input.ref} \
+		-o {output.bam} \
+		sams/{params.temp_id}.sam
+
+        samtools index {output.bam}
     """
+
+#    shell: """
+#        minimap2 -t {params.threads} -a -L -z 600,200 -x map-ont \
+#                -R \'{params.read_group}\' {input.ref} {input.fastq} \
+#            | samtools sort --verbosity 5 -m {params.mem}G -@{params.threads} \
+#                -O bam --reference {input.ref} > {output}
+#        samtools index {output}
+#    """
     
-## BAM QC 
+## Flowcell BAM QC ----------------------------------------------------------------
 rule samtools_stats:
-    input:
-        "bams/{flowcell}_{refid}.bam"
-    output:
-        "samtools_stats_{refid}/{flowcell}_{refid}.txt"
-    log:
-        "logs/samtools_stats/{flowcell}_{refid}.log"
-    wrapper:
-        "0.38.0/bio/samtools/stats"
+    input: "bams/{flowcell}_{refid}.bam"
+    output: "samtools_stats_{refid}/{flowcell}_{refid}.txt"
+    log: "logs/samtools_stats/{flowcell}_{refid}.log"
+    wrapper: "0.38.0/bio/samtools/stats"
 
 rule bam_stats:
-    input:
-        "bams/{flowcell}_{refid}.bam"
-    output:
-        "qc/{flowcell}_{refid}.bam.stats.tsv.gz"
+    input: "bams/{flowcell}_{refid}.bam"
+    output: "qc/{flowcell}_{refid}.bam.stats.tsv.gz"
     conda: "envs/bam_stats.yaml"
-    shell:
-        "python scripts/get_bam_stat.py {input} {output}"
-    
-rule multiqc:
-    input:
-        expand("samtools_stats_{{refid}}/{flowcell}_{{refid}}.txt",
-               flowcell = list(flowcells.index))
-    output:
-        "qc/multiqc_{refid}.html"
-    log:
-        "logs/multiqc_{refid}.log"
-    wrapper:
-        "0.38.0/bio/multiqc"
+    shell: "python scripts/get_bam_stat.py {input} {output}"
 
 ## Combine bams --------------------------------------------------------------------
 rule combine_bams:
@@ -155,24 +171,35 @@ rule combine_bams:
     threads: 3
     wrapper: "0.38.0/bio/samtools/merge"
 
+#rule combine_bams:
+#    input: 
+#        bams=expand("bams/{flowcell}_{{refid}}.bam", flowcell = list(flowcells.index)),
+#        bam_list="GRCh38_bamUtils.lst"
+#    output: "combined_{refid}.bam"
+#    params: refid="{refid}"
+#    conda: "envs/map_reads.yaml"
+#    shell: """
+#	bam mergeBam -v --list {input.bam_list} --out {output}
+#    """
+#
+#    shell: """ 
+#   	ls bams/*{params.refid}.bam > {params.refid}_bam.lst
+#   	bamtools merge -list {params.refid}_bam.lst -out {output} 
+#    """
+
 rule index_combined:
     input: "combined_{refid}.bam"
     output: "combined_{refid}.bam.bai"
     wrapper: "0.38.0/bio/samtools/index"
-        
-rule sort_combined:
-    input: 
-        bam="combined_{refid}.bam", 
-        bamidx="combined_{refid}.bam.bai",
-        ref="resources/{refid}.fna"
-    output: "combined.sorted_{refid}.bam"
-    conda: "envs/map_reads.yaml"
-    shell: "samtools sort -@4 -m 2G -O bam --reference {input.ref} -o {output} {input.bam}"
 
-rule index_sorted_combined:
-    input: "combined.sorted_{refid}.bam"
-    output: "combined.sorted_{refid}.bam.bai"
-    wrapper: "0.38.0/bio/samtools/index"
+
+## Combined BAM QC
+rule combined_bam_stats:
+    input: "combined_{refid}.bam"
+    output: 
+        txt="combined_{refid}_qc.txt"
+    conda: "envs/bam_stats.yaml"
+    shell: "python scripts/quick_qc.py {input} > {output.txt}"
 
 ## Phasing reads --------------------------------------------------------------------
 rule get_hs37d5_phased_vars:
@@ -201,17 +228,17 @@ rule get_GRCh38_phased_vars:
             tabix -p vcf {output.GRCh38}
     """
 
-
 rule phase_bams:
     input: 
-        bam = rules.sort_combined.output, 
-        bamidx = rules.index_sorted_combined.output,
+        bam = "bams/{flowcell}_{refid}.bam", 
+        bamidx = "bams/{flowcell}_{refid}.bam.bai",
         ref = "resources/{refid}.fna",
         refidx = "resources/{refid}.fna.fai",
         var = "resources/{refid}.vcf.gz",
         varidx = "resources/{refid}.vcf.gz.tbi",
-    output: "phased_{refid}.bam"
+    output: "phased/{flowcell}_{refid}.bam"
     params: whatshap = config["whatshap"]
+    conda: "envs/map_reads.yaml"
     shell: """
         {params.whatshap} haplotag \
             -o {output} -r {input.ref} \
@@ -220,5 +247,25 @@ rule phase_bams:
 
 rule index_phased:
     input: rules.phase_bams.output
+    output: "phased/{flowcell}_{refid}.bam.bai"
+    wrapper: "0.38.0/bio/samtools/index"
+
+## Combine Phased Reads -------------------------------------------------------------
+rule combine_phased:
+    input: expand("phased/{flowcell}_{{refid}}.bam", flowcell = list(flowcells.index))
+    output: "phased_{refid}.bam"
+    params: "-f -O bam"
+    threads: 3
+    wrapper: "0.38.0/bio/samtools/merge"
+
+rule index_combined_phased:
+    input: rules.combine_phased.output
     output: "phased_{refid}.bam.bai"
     wrapper: "0.38.0/bio/samtools/index"
+
+## Combined BAM QC
+rule phased_bam_stats:
+    input: "phased_{refid}.bam"
+    output:"phased_{refid}_qc.txt"
+    conda: "envs/bam_stats.yaml"
+    shell: "python scripts/quick_qc.py {input} > {output}"
