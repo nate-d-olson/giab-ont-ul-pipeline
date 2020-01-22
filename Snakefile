@@ -21,16 +21,14 @@ singularity: "docker://continuumio/miniconda3:4.4.10"
 ## Running pipeline
 rule all:
     input: 
-        expand("combined_{refid}.bam", refid = REFIDS), 
-        expand("combined_{refid}.bam.bai", refid = REFIDS),
         "combined.fastq.gz",
 	"combined.sequencing_summary.txt.gz",
-        expand("combined_{refid}_qc.txt", refid = REFIDS),
         expand("qc/{flowcell}_{refid}.bam.stats.tsv.gz", 
                refid = REFIDS,
                flowcell = list(flowcells.index)),
-         expand("phased_{refid}.bam", refid = REFIDS), 
-         expand("phased_{refid}.bam.bai", refid = REFIDS)
+        expand("phased_{refid}.bam", refid = REFIDS), 
+        expand("phased_{refid}.bam.bai", refid = REFIDS),
+        expand("phased_{refid}_qc.txt", refid = REFIDS)
 
 
 def get_config(wildcards):
@@ -153,28 +151,6 @@ rule bam_stats:
     output: "qc/{flowcell}_{refid}.bam.stats.tsv.gz"
     conda: "envs/bam_stats.yaml"
     shell: "python scripts/get_bam_stat.py {input} {output}"
-
-## Combine bams --------------------------------------------------------------------
-rule combine_bams:
-    input: expand("bams/{flowcell}_{{refid}}.bam", flowcell = list(flowcells.index))
-    output: "combined_{refid}.bam"
-    params: "-f -O bam"
-    threads: 3
-    wrapper: "0.38.0/bio/samtools/merge"
-
-rule index_combined:
-    input: "combined_{refid}.bam"
-    output: "combined_{refid}.bam.bai"
-    wrapper: "0.38.0/bio/samtools/index"
-
-
-## Combined BAM QC
-rule combined_bam_stats:
-    input: "combined_{refid}.bam"
-    output: 
-        txt="combined_{refid}_qc.txt"
-    conda: "envs/bam_stats.yaml"
-    shell: "python scripts/quick_qc.py {input} > {output.txt}"
 
 ## Phasing reads --------------------------------------------------------------------
 rule get_hs37d5_phased_vars:
