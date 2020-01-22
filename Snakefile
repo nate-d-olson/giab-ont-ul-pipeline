@@ -55,15 +55,6 @@ rule combine_and_compress_fastq:
     output: "fastq/{flowcell}.fastq.gz"
     shell: 'cat {input}/*fastq | gzip > {output}'
 
-## QC fastq files
-rule fastqc:
-    input: "fastq/{flowcell}.fastq.gz"
-    output:
-        html="qc/fastqc/{flowcell}.html",
-        zip="qc/fastqc/{flowcell}.zip"
-    wrapper:
-        "0.27.1/bio/fastqc"
-
 ## Combining fastq and sequencing summaries ---------------------------------------
 
 rule combine_fastq:
@@ -170,22 +161,6 @@ rule combine_bams:
     params: "-f -O bam"
     threads: 3
     wrapper: "0.38.0/bio/samtools/merge"
-
-#rule combine_bams:
-#    input: 
-#        bams=expand("bams/{flowcell}_{{refid}}.bam", flowcell = list(flowcells.index)),
-#        bam_list="GRCh38_bamUtils.lst"
-#    output: "combined_{refid}.bam"
-#    params: refid="{refid}"
-#    conda: "envs/map_reads.yaml"
-#    shell: """
-#	bam mergeBam -v --list {input.bam_list} --out {output}
-#    """
-#
-#    shell: """ 
-#   	ls bams/*{params.refid}.bam > {params.refid}_bam.lst
-#   	bamtools merge -list {params.refid}_bam.lst -out {output} 
-#    """
 
 rule index_combined:
     input: "combined_{refid}.bam"
