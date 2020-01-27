@@ -23,8 +23,8 @@ rule all:
         expand("qc/{flowcell}_{refid}.bam.stats.tsv.gz", 
                refid = REFIDS,
                flowcell = list(flowcells.index)),
-        #  expand("phased/NA12878-minion-ul_{refid}.bam", refid = REFIDS), 
-        #  expand("phased/NA12878-minion-ul_{refid}.bam.bai", refid = REFIDS)
+        expand("phased/NA12878-minion-ul_{refid}.bam", refid = REFIDS), 
+        expand("phased/NA12878-minion-ul_{refid}.bam.bai", refid = REFIDS)
 
         
 def get_config(wildcards):
@@ -73,18 +73,34 @@ rule map_reads:
         ref="resources/{refid}.fna", 
         refidx = "resources/{refid}.fna.fai",
         fastq="fastq/{flowcell}.fastq.gz"
-    output: 
-        bam="bams/{flowcell}_{refid}.bam",
-        bai="bams/{flowcell}_{refid}.bam.bai"
-    params: read_group=get_readgroup, mem=4, threads=8
+    output: temp("sams/{flowcell}_{refid}.sam")
+    params: read_group=get_readgroup, threads=8
     conda: "envs/map_reads.yaml"
     shell: """
         minimap2 -t {params.threads} --MD -aL -z 600,200 -x map-ont \
-                -R \'{params.read_group}\' {input.ref} {input.fastq} \
-            | samtools sort -m {params.mem}G -@{params.threads} \
-                -O bam --reference {input.ref} > {output.bam}
-        samtools index {output}
+                -R \'{params.read_group}\' {input.ref} {input.fastq} > {output}
     """
+
+rule sort_bam:
+    input: 
+        ref="resources/{refid}.fna", 
+	sam="sams/{flowcell}_{refid}.sam"
+    output: "bams/{flowcell}_{refid}.bam",
+    params: mem=4, threads=8
+    conda: "envs/map_reads.yaml"
+    shell: """
+        samtools sort \
+		-m {params.mem}G -@{params.threads} \
+                --reference {input.ref} \
+		-o {output} \
+		{input.sam}
+    """
+
+rule index_bam:
+    input: "bams/{flowcell}_{refid}.bam"
+    output: "bams/{flowcell}_{refid}.bam.bai"
+    conda: "envs/map_reads.yaml"
+    shell: " samtools index {output}"
     
 ## BAM QC 
 rule bam_stats:
@@ -98,28 +114,29 @@ rule bam_stats:
 
 
 ## Phasing reads --------------------------------------------------------------------
+
 rule get_hs37d5_phased_vars:
-    input: 
-        hs37d5 = FTP.remote(config["hs37d5"]["vars"]),
+    input: "resources/sp_v37.7.0.NA12878.vcf.gz"
     output:
         hs37d5 = "resources/hs37d5.vcf.gz",
         hs37d5_idx = "resources/hs37d5.vcf.gz.tbi",
-    run:
-            ## Moving files to resources directory
-            shell("mv {input.hs37d5} {output.hs37d5}")
-            shell("tabix -p vcf {output.hs37d5}")
+    shell: """
+            ## Fixing sample names for GRCh37 to match bams
+            bcftools view  {input} \
+                | sed 's/NA12878$/HG001/' \
+                | bgzip > {output.hs37d5}
+            tabix -p vcf {output.hs37d5}
+    """
 
 rule get_GRCh38_phased_vars:
-    input: 
-        GRCh38 = FTP.remote(config["GRCh38"]["vars"], keep_local = True)
+    input: "resources/sp_v38.1.0.NA12878.vcf.gz"
     output:
         GRCh38 = "resources/GRCh38.vcf.gz",
         GRCh38_idx = "resources/GRCh38.vcf.gz.tbi"
     shell: """
             ## Fixing sample names for GRCh38 to match bams
-            zcat {input.GRCh38} \
-                | sed 's/26897$/HG002/' \
-                | awk '{{if($0~/^#/){{print $0}} else if(($7=="PASS") || ($7==".")){{print $0}}}}' \
+            bcftools view {input} \
+                | sed 's/NA12878$/HG001/' \
                 | bgzip > {output.GRCh38}
             tabix -p vcf {output.GRCh38}
     """
@@ -133,15 +150,16 @@ rule phase_bams:
         refidx = "resources/{refid}.fna.fai",
         var = "resources/{refid}.vcf.gz",
         varidx = "resources/{refid}.vcf.gz.tbi",
-    output: "phased_{refid}.bam"
+    output: "phased/{flowcell}_{refid}.bam"
     params: whatshap = config["whatshap"]
+    conda: "envs/map_reads.yaml"
     shell: """
-        {params.whatshap} haplotag \
-            -o {output} -r {input.ref} \
-            {input.var} {input.bam}
-    """
+         {params.whatshap} haplotag \
+             -o {output} -r {input.ref} \
+             {input.var} {input.bam}
+     """
 
 rule index_phased:
     input: rules.phase_bams.output
-    output: "phased_{refid}.bam.bai"
+    output: "phased/{flowcell}_{refid}.bam.bai"
     wrapper: "0.38.0/bio/samtools/index"

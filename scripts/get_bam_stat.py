@@ -13,7 +13,7 @@ def get_bam_stats(bam_path, stats_path):
     try:
         bam = pysam.AlignmentFile(bam_path)
     except ValueError:
-        print(f"Error reading from {bam_path}...")
+        print("Error reading from " + bam_path)
         raise
 
     for read in bam:
