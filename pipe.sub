@@ -7,10 +7,11 @@
 #SBATCH --mail-type=ALL
 
 ## Activate conda environment
-source ~/miniconda3/bin/activate
+source $GROUP_HOME/ndolson/miniconda3/bin/activate
 
 ## Start pipeline
 snakemake -d /scratch/groups/msalit/nanopore/processing/guppy-3.2.4-snakemake-pipe  \
 	-p --use-conda --use-singularity \
+        --rerun-incomplete \
 	-j 999 --cluster-config cluster.json \
 	--cluster "sbatch -J {cluster.name} -p {cluster.partition} -n {cluster.n}  --mem {cluster.mem} -t {cluster.time} {cluster.resources} -e {cluster.error} -o {cluster.output} --mail-type ALL --profile ALL"

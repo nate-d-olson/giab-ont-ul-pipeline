@@ -22,13 +22,17 @@ singularity: "docker://continuumio/miniconda3:4.4.10"
 rule all:
     input: 
         "combined.fastq.gz",
+        "combined.read_stats.txt",
 	"combined.sequencing_summary.txt.gz",
         expand("qc/{flowcell}_{refid}.bam.stats.tsv.gz", 
                refid = REFIDS,
                flowcell = list(flowcells.index)),
         expand("phased_{refid}.bam", refid = REFIDS), 
         expand("phased_{refid}.bam.bai", refid = REFIDS),
-        expand("phased_{refid}_qc.txt", refid = REFIDS)
+        expand("phased_{refid}_qc.txt", refid = REFIDS),
+        expand("phased_{refid}.bam.stats.tsv.gz", refid = REFIDS),
+        expand("phased_{refid}.flagstat.txt", refid = REFIDS),
+        expand("phased_{refid}.stats.txt", refid = REFIDS)
 
 
 def get_config(wildcards):
@@ -60,6 +64,26 @@ rule combine_fastq:
     output: "combined.fastq.gz"
     shell: "cat {input} > {output}"
 
+rule qc_combined_fastq:
+    """
+    Input is the reads in directory output is info about reads
+    """
+    input: "combined.fastq.gz"
+    output: "combined.read_stats.txt"
+    message: "Calculating read coverage statitics for: {input}",
+    params:
+        read_stat_script = "scripts/rawcoverage.py",
+    threads: 12
+    conda: "envs/rawcoverage.yaml"
+    shell:
+        """
+        python {params.read_stat_script} -i {input} -o {output} -t {threads}
+        """
+
+#    conda: "envs/fastq_stats.yaml"
+#    params: threads=12
+#    shell: "fastqmetrics -t {params.threads} {input} > {output}"
+
 rule combine_seq_summary:
     input: expand("fastq/{flowcell}/sequencing_summary.txt", flowcell = list(flowcells.index))
     output: "combined.sequencing_summary.txt.gz"
@@ -67,6 +91,7 @@ rule combine_seq_summary:
         combined_tsv = pd.concat([pd.read_csv(f , delimiter='\t') for f in input])
         combined_tsv.to_csv( output[0], sep = "\t", 
                              index = False, compression = "gzip")
+
 
 ## Aligning to reference -----------------------------------------------------------
 def get_readgroup(wildcards):
@@ -220,3 +245,23 @@ rule phased_bam_stats:
     output:"phased_{refid}_qc.txt"
     conda: "envs/bam_stats.yaml"
     shell: "python scripts/quick_qc.py {input} > {output}"
+
+rule phased_bam_full_stats:
+    input: "phased_{refid}.bam"
+    output: "phased_{refid}.bam.stats.tsv.gz"
+    conda: "envs/bam_stats.yaml"
+    shell: "python scripts/get_bam_stat.py {input} {output}"
+
+
+rule phased_flagstat:
+    input: "phased_{refid}.bam"
+    output: "phased_{refid}.flagstat.txt"
+    wrapper: "0.49.0/bio/samtools/flagstat"
+
+
+rule phased_stats:
+    input: "phased_{refid}.bam"
+    output: "phased_{refid}.stats.txt"
+    wrapper: "0.49.0/bio/samtools/stats"
+
+
