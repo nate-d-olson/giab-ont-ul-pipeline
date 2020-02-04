@@ -6,13 +6,12 @@
 #SBATCH --partition=msalit
 #SBATCH --mail-type=ALL
 
-## Loading modules
-module load biology samtools bcftools
-
 ## Activate conda environment
-source ~/miniconda3/bin/activate
+source $GROUP_HOME/ndolson/miniconda3/bin/activate
 
 ## Start pipeline
-snakemake -d /scratch/groups/msalit/nanopore/processing/guppy-3.2.4-snakemake-pipe  \
-	--use-conda -j 999 --cluster-config cluster.json \
+snakemake -d /scratch/groups/msalit/nanopore/processing/guppy-3.4.5-snakemake-pipe  \
+	-p --use-conda \
+        --rerun-incomplete \
+	-j 999 --cluster-config cluster.json \
 	--cluster "sbatch -J {cluster.name} -p {cluster.partition} -n {cluster.n}  --mem {cluster.mem} -t {cluster.time} {cluster.resources} -e {cluster.error} -o {cluster.output} --mail-type ALL --profile ALL"
