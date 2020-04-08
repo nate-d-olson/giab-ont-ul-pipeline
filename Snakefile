@@ -11,59 +11,66 @@ configfile: "config.yaml"
 ## Reference Genomes
 REFIDS=['hs37d5','GRCh38']
 
+## Variables
+outdir=config["giab_id"]
 
 ## Loading flowcell metadata
 flowcells = pd.read_csv("flowcell_metadata.csv").set_index("flowcell_id")
 
+## Using signularity
+singularity: "docker://continuumio/miniconda3:4.4.10"
+
+
 ## Running pipeline
 rule all:
-    input: 
-        expand("combined.sorted_{refid}.bam", refid = REFIDS), 
-        expand("combined.sorted_{refid}.bam.bai", refid = REFIDS),
-        expand("qc/{flowcell}_{refid}.bam.stats.tsv.gz", 
+    input:
+        expand(outdir + "qc/{flowcell}_{refid}.bam.stats.tsv.gz",
                refid = REFIDS,
                flowcell = list(flowcells.index)),
-         expand("phased_{refid}.bam", refid = REFIDS), 
-         expand("phased_{refid}.bam.bai", refid = REFIDS)
-        ## Multi QC not recognizing output
-        # expand("qc/multiqc_{refid}.html", refid = REFIDS)
+        expand(outdir + "phased_{refid}.bam", refid = REFIDS),
+        expand(outdir + "phased_{refid}.bam.bai", refid = REFIDS),
+        expand(outdir + "phased_{refid}_qc.txt", refid = REFIDS),
+        expand(outdir + "phased_{refid}.bam.stats.tsv.gz", refid = REFIDS),
+        expand(outdir + "phased_{refid}.flagstat.txt", refid = REFIDS),
+        expand(outdir + "phased_{refid}.stats.txt", refid = REFIDS)
 
-        
+
 def get_config(wildcards):
     return flowcells.loc[wildcards.flowcell,"config"]
 
-## Basecalling --------------------------------------------------------------------
-## Skipping basecalling for UCSC data
-# rule basecalling:
-#     input: "../../raw/{flowcell}"
-#     output: directory("fastq/{flowcell}")
-#     params: get_config
-#     shell: 'sw/ont-guppy/bin/guppy_basecaller -x cuda:0 -r \
-#                 --num_callers 8 \
-#                 --gpu_runners_per_device 4 \
-#                 --chunks_per_runner 1664 \
-#                 --input_path {input} \
-#                 --save_path {output} \
-#                 --records_per_fastq 0 \
-#                 --config {params}'
+## Combining fastq and sequencing summaries ------------------------------------
+rule combine_fastq:
+    input: expand("fastq/{flowcell}.fastq.gz", flowcell = list(flowcells.index))
+    output: outdir + "combined.fastq.gz"
+    shell: "cat {input} > {output}"
 
-# rule combine_and_compress_fastq:
-#     input: rules.basecalling.output
-#     output: "fastq/{flowcell}.fastq.gz"
-#     shell: 'cat {input}/*fastq | gzip > {output}'
+rule qc_combined_fastq:
+    """
+    Input is the reads in directory output is info about reads
+    """
+    input: outdir + "combined.fastq.gz"
+    output: outdir + "combined.read_stats.txt"
+    message: "Calculating read coverage statitics for: {input}",
+    params:
+        read_stat_script = "scripts/rawcoverage.py",
+    threads: 12
+    conda: "envs/rawcoverage.yaml"
+    shell:
+        """
+        python {params.read_stat_script} -i {input} -o {output} -t {threads}
+        """
 
-# ## QC fastq files
-# rule fastqc:
-#     input: "fastq/{flowcell}.fastq.gz"
-#     output:
-#         html="qc/fastqc/{flowcell}.html",
-#         zip="qc/fastqc/{flowcell}.zip"
-#     wrapper:
-#         "0.27.1/bio/fastqc"
+rule combine_seq_summary:
+    input: expand(outdir + "fastq/{flowcell}/sequencing_summary.txt", flowcell = list(flowcells.index))
+    output: outdir + "combined.sequencing_summary.txt.gz"
+    run:
+        combined_tsv = pd.concat([pd.read_csv(f , delimiter='\t') for f in input])
+        combined_tsv.to_csv( output[0], sep = "\t",
+                             index = False, compression = "gzip")
 
-## Aligning to reference -----------------------------------------------------------
+## Aligning to reference -------------------------------------------------------
 def get_readgroup(wildcards):
-    ## Format bam read group 
+    ## Format bam read group
     run      = flowcells.loc[wildcards.flowcell, 'sample_id']
     model    = flowcells.loc[wildcards.flowcell, 'platform']
     lib      = flowcells.loc[wildcards.flowcell, 'sample_id']
@@ -71,10 +78,10 @@ def get_readgroup(wildcards):
     gpy_cfg  = flowcells.loc[wildcards.flowcell,'config']
     flowcell = flowcells.loc[wildcards.flowcell, 'type']
     kit      = flowcells.loc[wildcards.flowcell, 'kit']
-    sample   = flowcells.loc[wildcards.flowcell, 'sample']
-    
+    sample   = config["giab_id"]
+
     read_group =   (
-        f"@RG\\tID:{run}\\t"
+        f"@RG\\tID:{wildcards.flowcell}\\t"
         f"PU:{wildcards.flowcell}\\t"
         f"PL:nanopore\\t"
         f"PM:{model}\\t"
@@ -84,7 +91,7 @@ def get_readgroup(wildcards):
         f"DS:Flowcell={flowcell},kit={kit}\\t"
         f"SM:{sample}"
     )
-    
+
     return(read_group)
 
 rule get_hs37d5:
@@ -95,7 +102,7 @@ rule get_hs37d5:
 rule get_GRCh38:
     input: FTP.remote(config["GRCh38"]["ref"])
     output: "resources/GRCh38.fna"
-    shell: "gunzip -c {input} > {output}"    
+    shell: "gunzip -c {input} > {output}"
 
 rule index_ref:
     input: "resources/{refid}.fna"
@@ -104,81 +111,53 @@ rule index_ref:
 
 rule map_reads:
     input:
-        ref="resources/{refid}.fna", 
+        ref="resources/{refid}.fna",
         refidx = "resources/{refid}.fna.fai",
-        fastq="fastq/{flowcell}.fastq.gz"
-    output: "bams/{flowcell}_{refid}.bam"
-    params: read_group=get_readgroup, mem=4, threads=4
+        fastq=rules.combine_and_compress_fastq.output
+    output:
+        bam= outdir + "bams/{flowcell}_{refid}.bam",
+        bai= outdir + "bams/{flowcell}_{refid}.bam.bai"
+    params: read_group=get_readgroup, mem=12, threads=4
     conda: "envs/map_reads.yaml"
     shell: """
-        minimap2 -t {params.threads} -aL -z 600,200 -x map-ont \
+        minimap2 -t {params.threads} -a -L -z 600,200 -x map-ont \
                 -R \'{params.read_group}\' {input.ref} {input.fastq} \
             | samtools sort -m {params.mem}G -@{params.threads} \
-                -O bam --reference {input.ref} > {output}
-        samtools index {output}
+                -O bam --reference {input.ref} > {output.bam}
+        samtools index {output.bam}
     """
-    
-## BAM QC 
+
+## Flowcell BAM QC -------------------------------------------------------------
 rule samtools_stats:
-    input:
-        "bams/{flowcell}_{refid}.bam"
-    output:
-        "samtools_stats_{refid}/{flowcell}_{refid}.txt"
-    log:
-        "logs/samtools_stats/{flowcell}_{refid}.log"
-    wrapper:
-        "0.38.0/bio/samtools/stats"
+    input: outdir + "bams/{flowcell}_{refid}.bam"
+    output: outdir + "samtools_stats_{refid}/{flowcell}_{refid}.txt"
+    log: "logs/samtools_stats/{flowcell}_{refid}.log"
+    wrapper: "0.38.0/bio/samtools/stats"
 
 rule bam_stats:
-    input:
-        "bams/{flowcell}_{refid}.bam"
-    output:
-        "qc/{flowcell}_{refid}.bam.stats.tsv.gz"
+    input: "bams/{flowcell}_{refid}.bam"
+    output: outdir + "qc/{flowcell}_{refid}.bam.stats.tsv.gz"
     conda: "envs/bam_stats.yaml"
-    shell:
-        "python scripts/get_bam_stat.py {input} {output}"
-    
-rule multiqc:
-    input:
-        expand("samtools_stats_{{refid}}/{flowcell}_{{refid}}.txt",
-               flowcell = list(flowcells.index))
-    output:
-        "qc/multiqc_{refid}.html"
-    log:
-        "logs/multiqc_{refid}.log"
-    wrapper:
-        "0.38.0/bio/multiqc"
+    shell: "python scripts/get_bam_stat.py {input} {output}"
 
-## Combine bams --------------------------------------------------------------------
+## Combine bams ----------------------------------------------------------------
 rule combine_bams:
-    input: expand("bams/{flowcell}_{{refid}}.bam", flowcell = list(flowcells.index))
-    output: "combined_{refid}.bam"
+    input: expand(outdir + "bams/{flowcell}_{{refid}}.bam",
+    flowcell = list(flowcells.index))
+    output: outdir + "combined_{refid}.bam"
     params: "-f -O bam"
     threads: 3
     wrapper: "0.38.0/bio/samtools/merge"
 
 rule index_combined:
     input: "combined_{refid}.bam"
-    output: "combined_{refid}.bam.bai"
-    wrapper: "0.38.0/bio/samtools/index"
-        
-rule sort_combined:
-    input: 
-        bam="combined_{refid}.bam", 
-        bamidx="combined_{refid}.bam.bai",
-        ref="resources/{refid}.fna"
-    output: "combined.sorted_{refid}.bam"
-    conda: "envs/map_reads.yaml"
-    shell: "samtools sort -@4 -m 2G -O bam --reference {input.ref} -o {output} {input.bam}"
-
-rule index_sorted_combined:
-    input: "combined.sorted_{refid}.bam"
-    output: "combined.sorted_{refid}.bam.bai"
+    output: outdir + "combined_{refid}.bam.bai"
     wrapper: "0.38.0/bio/samtools/index"
 
-## Phasing reads --------------------------------------------------------------------
+
+## Phasing reads ---------------------------------------------------------------
 rule get_hs37d5_phased_vars:
-    input: 
+    input:
         hs37d5 = FTP.remote(config["hs37d5"]["vars"]),
     output:
         hs37d5 = "resources/hs37d5.vcf.gz",
@@ -189,11 +168,11 @@ rule get_hs37d5_phased_vars:
             shell("tabix -p vcf {output.hs37d5}")
 
 rule get_GRCh38_phased_vars:
-    input: 
+    input:
         GRCh38 = FTP.remote(config["GRCh38"]["vars"], keep_local = True)
     output:
-        GRCh38 = "resources/GRCh38.vcf.gz",
-        GRCh38_idx = "resources/GRCh38.vcf.gz.tbi"
+        GRCh38 = "resources/" + config["giab_id"] + "GRCh38.vcf.gz",
+        GRCh38_idx = "resources/" + config["giab_id"] + "GRCh38.vcf.gz.tbi"
     shell: """
             ## Fixing sample names for GRCh38 to match bams
             zcat {input.GRCh38} \
@@ -203,17 +182,17 @@ rule get_GRCh38_phased_vars:
             tabix -p vcf {output.GRCh38}
     """
 
-
 rule phase_bams:
-    input: 
-        bam = rules.sort_combined.output, 
-        bamidx = rules.index_sorted_combined.output,
+    input:
+        bam = outdir + "bams/{flowcell}_{refid}.bam",
+        bamidx = outdir + "bams/{flowcell}_{refid}.bam.bai",
         ref = "resources/{refid}.fna",
         refidx = "resources/{refid}.fna.fai",
-        var = "resources/{refid}.vcf.gz",
-        varidx = "resources/{refid}.vcf.gz.tbi",
-    output: "phased_{refid}.bam"
+        var = "resources/" + config["giab_id"] + "{refid}.vcf.gz",
+        varidx = "resources/" + config["giab_id"] + "{refid}.vcf.gz.tbi",
+    output: outdir + "phased/{flowcell}_{refid}.bam"
     params: whatshap = config["whatshap"]
+    conda: "envs/map_reads.yaml"
     shell: """
         {params.whatshap} haplotag \
             -o {output} -r {input.ref} \
@@ -222,5 +201,45 @@ rule phase_bams:
 
 rule index_phased:
     input: rules.phase_bams.output
-    output: "phased_{refid}.bam.bai"
+    output: outdir + "phased/{flowcell}_{refid}.bam.bai"
     wrapper: "0.38.0/bio/samtools/index"
+
+## Combine Phased Reads --------------------------------------------------------
+rule combine_phased:
+    input: expand("phased/{flowcell}_{{refid}}.bam",
+                flowcell = list(flowcells.index))
+    output: outdir + "phased_{refid}.bam"
+    params: "-f -O bam"
+    threads: 3
+    wrapper: "0.38.0/bio/samtools/merge"
+
+rule index_combined_phased:
+    input: rules.combine_phased.output
+    output: outdir + "phased_{refid}.bam.bai"
+    wrapper: "0.38.0/bio/samtools/index"
+
+## Combined BAM QC
+rule phased_bam_stats:
+    input: outdir + "phased_{refid}.bam"
+    output: outdir + "phased_{refid}_qc.txt"
+    conda: "envs/bam_stats.yaml"
+    shell: "python scripts/quick_qc.py {input} > {output}"
+
+rule phased_bam_full_stats:
+    input: outdir + "phased_{refid}.bam"
+    output: outdir + "phased_{refid}.bam.stats.tsv.gz"
+    conda: "envs/bam_stats.yaml"
+    shell: "python scripts/get_bam_stat.py {input} {output}"
+
+
+rule phased_flagstat:
+    input: outdir + "phased_{refid}.bam"
+    output: outdir + "phased_{refid}.flagstat.txt"
+    wrapper: "0.49.0/bio/samtools/flagstat"
+
+
+rule phased_stats:
+    input: outdir + "phased_{refid}.bam"
+    output: outdir + "phased_{refid}.stats.txt"
+    wrapper: "0.49.0/bio/samtools/stats"
+
