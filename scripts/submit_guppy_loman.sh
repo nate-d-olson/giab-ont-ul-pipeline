@@ -14,7 +14,7 @@ module load python/3.6.1 R
 
 FLOWCELLID=PAC17886
 GUPPY=sw/ont-guppy/bin/guppy_basecaller
-F5DIR=../../raw/${FLOWCELLID}
+F5DIR=../../raw_compressed/${FLOWCELLID}
 FQDIR=fastq/${FLOWCELLID}
 
 ## Get GPU information
