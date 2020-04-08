@@ -1,7 +1,7 @@
 #!/usr/bin/bash -l
 #SBATCH -n 4  # number of cores
 #SBATCH --mem 8g # memory pool for all cores
-#SBATCH --array=5
+#SBATCH --array=0
 #SBATCH --job-name=guppy-ash
 #SBATCH --output=array_%A_%a.out
 #SBATCH --error=array_%A_%a.err
@@ -17,7 +17,7 @@ module load python/3.6.1 R
 
 FLOWCELLID=PAD11290
 GUPPY=sw/ont-guppy/bin/guppy_basecaller
-F5DIR=../../raw/${FLOWCELLID}/${FLOWCELLID}
+F5DIR=../../raw_compressed/${FLOWCELLID}/${FLOWCELLID}
 FQDIR=fastq/${FLOWCELLID}
 
 ## Get GPU information
