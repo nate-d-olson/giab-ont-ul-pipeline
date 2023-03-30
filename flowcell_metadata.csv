@@ -1,4 +1,10 @@
-flowcell_id,lab,date,sample_id,type,kit,config,platform
-PAD29338,UCSC,2019-01-25,GM24385_1,FLO-PRO002,SQK-LSK109,dna_r9.4.1_450bps_flipflop.cfg,PromethION
-PAD28937,UCSC,2019-01-25,GM24385_2,FLO-PRO002,SQK-LSK109,dna_r9.4.1_450bps_flipflop.cfg,PromethION
-PAD28926,UCSC,2019-01-25,GM24385_3,FLO-PRO002,SQK-LSK109,dna_r9.4.1_450bps_flipflop.cfg,PromethION
+giab_id,flowcell_id,lab,date,sample_id,type,kit,config,platform,fq
+HG007,PAE36029,UCSC,2020-01-09,GM24695_1,FLO-PRO002,SQK-LSK109,dna_r9.4.1_450bps_flipflop.cfg,PromethION,../hctrio-ont-ul-data/01_09_20_R941_GM24695_1_Guppy_4.2.2_prom.fastq.gz
+HG007,PAE38112,UCSC,2020-01-09,GM24695_2,FLO-PRO002,SQK-LSK109,dna_r9.4.1_450bps_flipflop.cfg,PromethION,../hctrio-ont-ul-data/01_09_20_R941_GM24695_2_Guppy_4.2.2_prom.fastq.gz
+HG007,PAE34780,UCSC,2020-01-09,GM24695_3,FLO-PRO002,SQK-LSK109,dna_r9.4.1_450bps_flipflop.cfg,PromethION,../hctrio-ont-ul-data/01_09_20_R941_GM24695_3_Guppy_4.2.2_prom.fastq.gz
+HG006,PAE32564,UCSC,2020-01-09,GM24694_1,FLO-PRO002,SQK-LSK109,dna_r9.4.1_450bps_flipflop.cfg,PromethION,../hctrio-ont-ul-data/01_09_20_R941_GM24694_1_Guppy_4.2.2_prom.fastq.gz
+HG006,PAE36095,UCSC,2020-01-09,GM24694_2,FLO-PRO002,SQK-LSK109,dna_r9.4.1_450bps_flipflop.cfg,PromethION,../hctrio-ont-ul-data/01_09_20_R941_GM24694_2_Guppy_4.2.2_prom.fastq.gz
+HG006,PAE36103,UCSC,2020-01-09,GM24694_3,FLO-PRO002,SQK-LSK109,dna_r9.4.1_450bps_flipflop.cfg,PromethION,../hctrio-ont-ul-data/01_09_20_R941_GM24694_3_Guppy_4.2.2_prom.fastq.gz
+HG005,PAE36123,UCSC,2020-01-09,GM24631_1,FLO-PRO002,SQK-LSK109,dna_r9.4.1_450bps_flipflop.cfg,PromethION,../hctrio-ont-ul-data/01_09_20_R941_GM24631_1_Guppy_4.2.2_prom.fastq.gz
+HG005,PAE33247,UCSC,2020-01-09,GM24631_2,FLO-PRO002,SQK-LSK109,dna_r9.4.1_450bps_flipflop.cfg,PromethION,../hctrio-ont-ul-data/01_09_20_R941_GM24631_2_Guppy_4.2.2_prom.fastq.gz
+HG005,PAE36031,UCSC,2020-01-09,GM24631_3,FLO-PRO002,SQK-LSK109,dna_r9.4.1_450bps_flipflop.cfg,PromethION,../hctrio-ont-ul-data/01_09_20_R941_GM24631_3_Guppy_4.2.2_prom.fastq.gz

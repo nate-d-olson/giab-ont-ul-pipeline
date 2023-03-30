@@ -1,2 +1,6 @@
 ## ignorning job log files
 slurm*
+.snakemake
+bams
+qc
+resources
