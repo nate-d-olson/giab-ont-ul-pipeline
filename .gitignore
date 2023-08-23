@@ -1,2 +1,3 @@
 ## ignorning job log files
 slurm*
+.snakemake
