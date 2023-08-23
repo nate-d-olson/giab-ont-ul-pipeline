@@ -1,4 +1,4 @@
-flowcell_id,lab,date,sample_id,type,kit,config,platform
-PAD29338,UCSC,2019-01-25,GM24385_1,FLO-PRO002,SQK-LSK109,dna_r9.4.1_450bps_flipflop.cfg,PromethION
-PAD28937,UCSC,2019-01-25,GM24385_2,FLO-PRO002,SQK-LSK109,dna_r9.4.1_450bps_flipflop.cfg,PromethION
-PAD28926,UCSC,2019-01-25,GM24385_3,FLO-PRO002,SQK-LSK109,dna_r9.4.1_450bps_flipflop.cfg,PromethION
+flowcell_id,giab_id,lab,date,sample_id,config,platform,fq
+R1041_HG002_UL_Kit14_1,HG002,NE,2022-11-16,11_16_22_R1041_HG002_UL_Kit14_400_1,dna_r10.4.1_e8.2_sup@v3.5.1,PromethION,../ontUL-mapping/fq/R10.4.1_Guppy6.3.8_UL100kb_400/11_16_22_R1041_HG002_UL_Kit14_400_1_Guppy_6.3.8_5mC_sup.pass.lt100kb.fastq
+R1041_HG002_UL_Kit14_2,HG002,NE,2022-11-16,11_16_22_R1041_HG002_UL_Kit14_400_2,dna_r10.4.1_e8.2_sup@v3.5.1,PromethION,../ontUL-mapping/fq/R10.4.1_Guppy6.3.8_UL100kb_400/11_16_22_R1041_HG002_UL_Kit14_400_2_Guppy_6.3.8_5mC_sup.pass.lt100kb.fastq
+R1041_HG002_UL_Kit14_3,HG002,NE,2022-11-16,11_16_22_R1041_HG002_UL_Kit14_400_3,dna_r10.4.1_e8.2_sup@v3.5.1,PromethION,../ontUL-mapping/fq/R10.4.1_Guppy6.3.8_UL100kb_400/11_16_22_R1041_HG002_UL_Kit14_400_3_Guppy_6.3.8_5mC_sup.pass.lt100kb.fastq
